@@ -57,7 +57,6 @@ export function SignupForm({
     try {
       const file = (data.profile_picture as FileList | undefined)?.[0];
 
-      // ✅ Backend যদি file নেয়, safest is FormData (multipart/form-data)
       const formData = new FormData();
       formData.append("first_name", data.first_name);
       formData.append("last_name", data.last_name);
@@ -65,26 +64,20 @@ export function SignupForm({
       formData.append("password", data.password);
       formData.append("password2", data.password2);
       formData.append("phone_number", data.phone_number);
-      formData.append("is_agree", "true"); // literal true required
+      formData.append("is_agree", "true");
 
-      if (file) {
-        formData.append("profile_picture", file);
-      } else {
-        // backend যদি field চাই কিন্তু empty ok হয়, চাইলে এটা রাখতে পারো:
-        // formData.append("profile_picture", "");
-      }
+      if (file) formData.append("profile_picture", file);
 
       await signup(formData as any).unwrap();
-      router.push("/login");
+
+      // ✅ Register done → OTP page এ যাবে
+      router.push(`/verify-otp?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       const apiData = err?.data;
 
-      // generic msg
       if (apiData?.message) {
         setError("email", { type: "server", message: apiData.message });
       }
-
-      // field-wise errors (backend যেভাবে দেয়)
       if (apiData?.email?.[0]) {
         setError("email", { type: "server", message: apiData.email[0] });
       }
@@ -181,8 +174,8 @@ export function SignupForm({
             <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>
           )}
           <FieldDescription>
-            We&apos;ll use this to contact you. We will not share your email with
-            anyone else.
+            We&apos;ll use this to contact you. We will not share your email
+            with anyone else.
           </FieldDescription>
         </Field>
 
@@ -271,7 +264,9 @@ export function SignupForm({
             </span>
           </label>
           {errors.is_agree && (
-            <p className="text-xs text-red-500 mt-1">{errors.is_agree.message}</p>
+            <p className="text-xs text-red-500 mt-1">
+              {errors.is_agree.message}
+            </p>
           )}
         </Field>
 

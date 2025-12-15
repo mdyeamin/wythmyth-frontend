@@ -17,58 +17,64 @@ import {
 import { Input } from "./ui/input";
 import Link from "next/link";
 
-import { useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
-import { useLoginMutation } from "../../lib/api/authApi";
-import { setCredentials } from "../../lib/auth/authSlice";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import {
+  useLoginMutation,
+  useVerifyEmailMutation,
+  useResendOtpMutation,
+} from "../../lib/api/authApi";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
   const router = useRouter();
-  const dispatch = useDispatch();
+  const searchParams = useSearchParams();
+
+  const needOtp = searchParams.get("needOtp") === "1";
+  const emailFromQuery = searchParams.get("email") || "";
+
+  const [otp, setOtp] = useState("");
+  const [otpMsg, setOtpMsg] = useState<string | null>(null);
 
   const [login, { isLoading, error }] = useLoginMutation();
+  const [verifyEmail, { isLoading: verifyingOtp }] = useVerifyEmailMutation();
+  const [resendOtp, { isLoading: resendingOtp }] = useResendOtpMutation();
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
+    setValue,
+    watch,
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      email: emailFromQuery,
       password: "",
     },
     mode: "onSubmit",
   });
+
+  // query param থেকে email auto set
+  useEffect(() => {
+    if (emailFromQuery) setValue("email", emailFromQuery);
+  }, [emailFromQuery, setValue]);
 
   const onInvalid = (errs: any) => {
     console.log("FORM INVALID ❌", errs);
   };
 
   const onSubmit = async (data: LoginFormValues) => {
-    console.log("LOGIN SUBMIT ✅", data);
-
     try {
-      // ✅ backend expects: { email, password }
-      const payload = {
-        email: data.email,
-        password: data.password,
-      };
-
-      const res = await login(payload).unwrap();
-
-      // ✅ save token/user etc (as your slice expects)
-      dispatch(setCredentials(res));
-
+      const payload = { email: data.email, password: data.password };
+      await login(payload).unwrap();
       router.push("/"); // or "/dashboard"
     } catch (err: any) {
       const apiData = err?.data;
 
-      // common backend patterns
       if (apiData?.detail) {
         setError("password", { type: "server", message: apiData.detail });
       } else if (apiData?.message) {
@@ -88,6 +94,46 @@ export function LoginForm({
     }
   };
 
+  const handleVerifyOtp = async () => {
+    setOtpMsg(null);
+    const email = emailFromQuery || watch("email");
+
+    if (!email) {
+      setOtpMsg("Email is missing.");
+      return;
+    }
+    if (!otp || otp.length < 4) {
+      setOtpMsg("Please enter a valid OTP.");
+      return;
+    }
+
+    try {
+      await verifyEmail({ email, otp }).unwrap();
+      setOtpMsg("✅ OTP verified. Now you can login.");
+
+      // needOtp remove করে login enable
+      router.replace(`/login?email=${encodeURIComponent(email)}`);
+    } catch (err: any) {
+      setOtpMsg(err?.data?.message || "❌ OTP invalid or expired.");
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setOtpMsg(null);
+    const email = emailFromQuery || watch("email");
+    if (!email) {
+      setOtpMsg("Email is missing.");
+      return;
+    }
+
+    try {
+      await resendOtp({ email }).unwrap();
+      setOtpMsg("✅ OTP sent again. Check your email.");
+    } catch (err: any) {
+      setOtpMsg(err?.data?.message || "❌ Failed to resend OTP.");
+    }
+  };
+
   return (
     <form
       className={cn("flex flex-col gap-6", className)}
@@ -102,6 +148,47 @@ export function LoginForm({
             Enter your email below to login to your account
           </p>
         </div>
+
+        {/* ✅ OTP box */}
+        {needOtp && (
+          <div className="rounded-md border p-4 space-y-3">
+            <p className="text-sm">
+              We sent an OTP to <b>{emailFromQuery || watch("email")}</b>. Verify
+              to login.
+            </p>
+
+            <Input
+              placeholder="Enter OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
+
+            <Button
+              type="button"
+              className="w-full"
+              onClick={handleVerifyOtp}
+              disabled={verifyingOtp}
+            >
+              {verifyingOtp ? "Verifying..." : "Verify OTP"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleResendOtp}
+              disabled={resendingOtp}
+            >
+              {resendingOtp ? "Sending..." : "Resend OTP"}
+            </Button>
+
+            {otpMsg && (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {otpMsg}
+              </p>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
@@ -120,6 +207,7 @@ export function LoginForm({
             type="email"
             placeholder="m@example.com"
             {...register("email")}
+            disabled={!!emailFromQuery} // query থেকে এলে lock
           />
           {errors.email && (
             <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
@@ -156,11 +244,17 @@ export function LoginForm({
         <Field>
           <Button
             type="submit"
-            disabled={isSubmitting || isLoading}
+            disabled={needOtp || isSubmitting || isLoading}
             className="w-full"
+            title={needOtp ? "Verify OTP first" : undefined}
           >
             {isSubmitting || isLoading ? "Logging in..." : "Login"}
           </Button>
+          {needOtp && (
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              🔒 Verify OTP first to enable login.
+            </p>
+          )}
         </Field>
 
         <FieldSeparator>Or continue with</FieldSeparator>

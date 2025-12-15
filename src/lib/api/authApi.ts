@@ -12,12 +12,30 @@ export const authApi = baseApi.injectEndpoints({
         password: string;
         password2: string;
         phone_number?: string;
-        profile_picture?: string;
+        profile_picture?: any; // File হলে any রাখো, FormData ইউজ করলে handle করবে
         is_agree: boolean;
       }
     >({
       query: (body) => ({
         url: "/api/auth/signup/",
+        method: "POST",
+        body,
+      }),
+    }),
+
+    // ✅ VERIFY EMAIL/OTP: /api/auth/verify-email/
+    verifyEmail: builder.mutation<any, { email: string; otp: string }>({
+      query: (body) => ({
+        url: "/api/auth/verify-email/",
+        method: "POST",
+        body,
+      }),
+    }),
+
+    // ✅ RESEND OTP: /api/auth/resend-otp/
+    resendOtp: builder.mutation<any, { email: string }>({
+      query: (body) => ({
+        url: "/api/auth/resend-otp/",
         method: "POST",
         body,
       }),
@@ -32,18 +50,46 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // ⛳️ এগুলো backend থেকে confirm না হওয়া পর্যন্ত placeholder
-    forgotPassword: builder.mutation<any, { email: string }>({
+    // ✅ CURRENT USER: /api/auth/current-user/
+    currentUser: builder.query<any, void>({
+      query: () => ({
+        url: "/api/auth/current-user/",
+        method: "GET",
+      }),
+    }),
+
+    // ✅ LOGOUT: /api/auth/logout/
+    logout: builder.mutation<any, void>({
+      query: () => ({
+        url: "/api/auth/logout/",
+        method: "POST",
+      }),
+    }),
+
+    // ✅ TOKEN REFRESH (cookie based): /api/auth/token/refresh/
+    refreshToken: builder.mutation<any, void>({
+      query: () => ({
+        url: "/api/auth/token/refresh/",
+        method: "POST",
+      }),
+    }),
+
+    // ✅ SEND RESET EMAIL: /api/auth/send-reset-password-email/
+    sendResetPasswordEmail: builder.mutation<any, { email: string }>({
       query: (body) => ({
-        url: "/api/auth/forgot-password/", // ⚠️ backend এ যেটা আছে সেটাই দিতে হবে
+        url: "/api/auth/send-reset-password-email/",
         method: "POST",
         body,
       }),
     }),
 
-    resetPassword: builder.mutation<any, { uid: string; token: string; new_password: string }>({
-      query: (body) => ({
-        url: "/api/auth/reset-password/", // ⚠️ backend এ যেটা আছে সেটাই দিতে হবে
+    // ✅ RESET PASSWORD: /api/auth/reset-password/{uid}/{token}/
+    resetPassword: builder.mutation<
+      any,
+      { uid: string; token: string; password: string; password2: string }
+    >({
+      query: ({ uid, token, ...body }) => ({
+        url: `/api/auth/reset-password/${uid}/${token}/`,
         method: "POST",
         body,
       }),
@@ -53,7 +99,12 @@ export const authApi = baseApi.injectEndpoints({
 
 export const {
   useSignupMutation,
+  useVerifyEmailMutation,
+  useResendOtpMutation,
   useLoginMutation,
-  useForgotPasswordMutation,
+  useCurrentUserQuery,
+  useLogoutMutation,
+  useRefreshTokenMutation,
+  useSendResetPasswordEmailMutation,
   useResetPasswordMutation,
 } = authApi;
