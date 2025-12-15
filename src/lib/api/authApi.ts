@@ -5,21 +5,22 @@ export const authApi = baseApi.injectEndpoints({
     // ✅ SIGNUP: /api/auth/signup/
     signup: builder.mutation<
       any,
-      {
-        first_name: string;
-        last_name: string;
-        email: string;
-        password: string;
-        password2: string;
-        phone_number?: string;
-        profile_picture?: any; // File হলে any রাখো, FormData ইউজ করলে handle করবে
-        is_agree: boolean;
-      }
+      | FormData
+      | {
+          first_name: string;
+          last_name: string;
+          email: string;
+          password: string;
+          password2: string;
+          phone_number?: string;
+          profile_picture?: any;
+          is_agree: boolean;
+        }
     >({
       query: (body) => ({
         url: "/api/auth/signup/",
         method: "POST",
-        body,
+        body, // FormData হলে multipart auto হবে
       }),
     }),
 
@@ -89,12 +90,16 @@ export const authApi = baseApi.injectEndpoints({
       { uid: string; token: string; password: string; password2: string }
     >({
       query: ({ uid, token, ...body }) => ({
-        url: `/api/auth/reset-password/${uid}/${token}/`,
+        url: `/api/auth/reset-password/${encodeURIComponent(uid)}/${encodeURIComponent(
+          token
+        )}/`,
         method: "POST",
-        body,
+        body, // { password, password2 }
       }),
     }),
   }),
+  
+  overrideExisting: false,
 });
 
 export const {
