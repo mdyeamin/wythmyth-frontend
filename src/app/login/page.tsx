@@ -1,6 +1,6 @@
 import { Brain } from "lucide-react"
 
-import { LoginForm } from "../components/login-from"
+import { LoginForm } from "../components/login-form"
 
 export default function LoginPage() {
   return (

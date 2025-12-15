@@ -1,4 +1,5 @@
 "use client";
+
 import { cn } from "../../lib/utils";
 import { Button } from "../components/ui/button";
 import { FaGithub } from "react-icons/fa";
@@ -16,40 +17,99 @@ import {
 import { Input } from "../components/ui/input";
 import Link from "next/link";
 
+import { useRouter } from "next/navigation";
+import { useSignupMutation } from "../../lib/api/authApi";
+
 export function SignupForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
+  const router = useRouter();
+  const [signup, { isLoading, error }] = useSignupMutation();
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
+    setError,
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
-      confirmPassword: "",
-      phone: "",
-      terms: false,
+      password2: "",
+      phone_number: "",
+      is_agree: false as any, // schema will require true on submit
+      profile_picture: undefined,
     },
+    mode: "onSubmit",
   });
 
-  const onSubmit = (data: SignupFormValues) => {
-    console.log("Signup form data", data);
-    // ekhane API call / mutation korbe
+  const onInvalid = (errs: any) => {
+    console.log("FORM INVALID ❌", errs);
+  };
+
+  const onSubmit = async (data: SignupFormValues) => {
+    console.log("SUBMIT HIT ✅", data);
+
+    try {
+      const file = (data.profile_picture as FileList | undefined)?.[0];
+
+      // ✅ Backend যদি file নেয়, safest is FormData (multipart/form-data)
+      const formData = new FormData();
+      formData.append("first_name", data.first_name);
+      formData.append("last_name", data.last_name);
+      formData.append("email", data.email);
+      formData.append("password", data.password);
+      formData.append("password2", data.password2);
+      formData.append("phone_number", data.phone_number);
+      formData.append("is_agree", "true"); // literal true required
+
+      if (file) {
+        formData.append("profile_picture", file);
+      } else {
+        // backend যদি field চাই কিন্তু empty ok হয়, চাইলে এটা রাখতে পারো:
+        // formData.append("profile_picture", "");
+      }
+
+      await signup(formData as any).unwrap();
+      router.push("/login");
+    } catch (err: any) {
+      const apiData = err?.data;
+
+      // generic msg
+      if (apiData?.message) {
+        setError("email", { type: "server", message: apiData.message });
+      }
+
+      // field-wise errors (backend যেভাবে দেয়)
+      if (apiData?.email?.[0]) {
+        setError("email", { type: "server", message: apiData.email[0] });
+      }
+      if (apiData?.password?.[0]) {
+        setError("password", { type: "server", message: apiData.password[0] });
+      }
+      if (apiData?.phone_number?.[0]) {
+        setError("phone_number", {
+          type: "server",
+          message: apiData.phone_number[0],
+        });
+      }
+
+      console.log("Signup failed:", err);
+    }
   };
 
   return (
     <form
-      className={cn("flex flex-col gap-6", className)}
-      onSubmit={handleSubmit(onSubmit)}
       {...props}
+      className={cn("flex flex-col gap-6", className)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      noValidate
     >
       <FieldGroup>
-        {/* Title */}
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Create your account</h1>
           <p className="text-muted-foreground text-sm text-balance">
@@ -57,49 +117,56 @@ export function SignupForm({
           </p>
         </div>
 
-        {/* Row 1: First Name + Last Name */}
+        {error && (
+          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
+            <pre className="whitespace-pre-wrap">
+              {JSON.stringify((error as any)?.data ?? error, null, 2)}
+            </pre>
+          </div>
+        )}
+
+        {/* first_name + last_name */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <Field>
-              <FieldLabel htmlFor="firstName" className="mb-2">
+              <FieldLabel htmlFor="first_name" className="mb-2">
                 First Name
               </FieldLabel>
               <Input
-                id="firstName"
+                id="first_name"
                 type="text"
                 placeholder="Enter your first name"
-                required
-                {...register("firstName")}
+                {...register("first_name")}
               />
-              {errors.firstName && (
+              {errors.first_name && (
                 <p className="text-xs text-red-500 mt-1">
-                  {errors.firstName.message}
+                  {errors.first_name.message}
                 </p>
               )}
             </Field>
           </div>
+
           <div className="flex-1">
             <Field>
-              <FieldLabel htmlFor="lastName" className="mb-2">
+              <FieldLabel htmlFor="last_name" className="mb-2">
                 Last Name
               </FieldLabel>
               <Input
-                id="lastName"
+                id="last_name"
                 type="text"
                 placeholder="Enter your last name"
-                required
-                {...register("lastName")}
+                {...register("last_name")}
               />
-              {errors.lastName && (
+              {errors.last_name && (
                 <p className="text-xs text-red-500 mt-1">
-                  {errors.lastName.message}
+                  {errors.last_name.message}
                 </p>
               )}
             </Field>
           </div>
         </div>
 
-        {/* Row 2: Email */}
+        {/* email */}
         <Field>
           <FieldLabel htmlFor="email" className="mb-2">
             Email
@@ -108,19 +175,18 @@ export function SignupForm({
             id="email"
             type="email"
             placeholder="Enter your email"
-            required
             {...register("email")}
           />
           {errors.email && (
             <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>
           )}
           <FieldDescription>
-            We&apos;ll use this to contact you. We will not share your email
-            with anyone else.
+            We&apos;ll use this to contact you. We will not share your email with
+            anyone else.
           </FieldDescription>
         </Field>
 
-        {/* Row 3: Password + Confirm Password */}
+        {/* password + password2 */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <Field>
@@ -131,7 +197,6 @@ export function SignupForm({
                 id="password"
                 type="password"
                 placeholder="Enter your password"
-                required
                 {...register("password")}
               />
               {errors.password && (
@@ -139,68 +204,64 @@ export function SignupForm({
                   {errors.password.message}
                 </p>
               )}
-              <FieldDescription>
-                {/* Must be at least 8 characters long. */}
-              </FieldDescription>
             </Field>
           </div>
+
           <div className="flex-1">
             <Field>
-              <FieldLabel htmlFor="confirmPassword" className="mb-2">
+              <FieldLabel htmlFor="password2" className="mb-2">
                 Confirm Password
               </FieldLabel>
               <Input
-                id="confirmPassword"
+                id="password2"
                 type="password"
                 placeholder="Enter confirm password"
-                required
-                {...register("confirmPassword")}
+                {...register("password2")}
               />
-              {errors.confirmPassword && (
+              {errors.password2 && (
                 <p className="text-xs text-red-500 mt-1">
-                  {errors.confirmPassword.message}
+                  {errors.password2.message}
                 </p>
               )}
-              <FieldDescription>
-                {/* Please confirm your password. */}
-              </FieldDescription>
             </Field>
           </div>
         </div>
 
-        {/* Row 4: Phone Number */}
+        {/* phone_number */}
         <Field>
-          <FieldLabel htmlFor="phone" className="mb-2">
+          <FieldLabel htmlFor="phone_number" className="mb-2">
             Phone Number
           </FieldLabel>
           <Input
-            id="phone"
+            id="phone_number"
             type="tel"
             placeholder="Enter phone number (e.g. +1234567890)"
-            {...register("phone")}
+            {...register("phone_number")}
           />
-          {errors.phone && (
-            <p className="text-xs text-red-500 mt-1">{errors.phone.message}</p>
+          {errors.phone_number && (
+            <p className="text-xs text-red-500 mt-1">
+              {errors.phone_number.message}
+            </p>
           )}
         </Field>
 
-        {/* Row 5: Personal Image (Optional) */}
+        {/* profile_picture */}
         <Field>
-          <FieldLabel htmlFor="avatar" className="mb-2">
-            Personal image (Optional)
+          <FieldLabel htmlFor="profile_picture" className="mb-2">
+            Profile picture (Optional)
           </FieldLabel>
-          <Input id="avatar" type="file" {...register("avatar")} />
+          <Input
+            id="profile_picture"
+            type="file"
+            accept="image/*"
+            {...register("profile_picture")}
+          />
         </Field>
 
-        {/* Row 6: Terms & Conditions checkbox */}
+        {/* is_agree */}
         <Field>
           <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              required
-              {...register("terms")}
-            />
+            <input type="checkbox" className="mt-1" {...register("is_agree")} />
             <span>
               I agree to the{" "}
               <a href="#" className="underline underline-offset-4">
@@ -209,22 +270,19 @@ export function SignupForm({
               <span className="text-red-500">*</span>
             </span>
           </label>
-          {errors.terms && (
-            <p className="text-xs text-red-500 mt-1">{errors.terms.message}</p>
+          {errors.is_agree && (
+            <p className="text-xs text-red-500 mt-1">{errors.is_agree.message}</p>
           )}
         </Field>
 
-        {/* Create Account button */}
         <Field>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Account"}
+          <Button type="submit" disabled={isSubmitting || isLoading}>
+            {isSubmitting || isLoading ? "Creating..." : "Create Account"}
           </Button>
         </Field>
 
-        {/* OR continue with */}
         <FieldSeparator>Or continue with</FieldSeparator>
 
-        {/* GitHub button + bottom text */}
         <Field>
           <Button
             variant="outline"
