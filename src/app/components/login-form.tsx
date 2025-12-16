@@ -25,11 +25,15 @@ import {
   useResendOtpMutation,
 } from "../../lib/api/authApi";
 
+import { useDispatch } from "react-redux";
+import { setUser } from "../../lib/auth/authSlice"; // ✅ setCredentials না, setUser
+
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
   const router = useRouter();
+  const dispatch = useDispatch();
   const searchParams = useSearchParams();
 
   const needOtp = searchParams.get("needOtp") === "1";
@@ -70,8 +74,16 @@ export function LoginForm({
   const onSubmit = async (data: LoginFormValues) => {
     try {
       const payload = { email: data.email, password: data.password };
-      await login(payload).unwrap();
-      router.push("/"); // or "/dashboard"
+      const res = await login(payload).unwrap();
+
+      // ✅ তোমার backend pattern: response.data.user
+      const user = res?.data?.user ?? res?.user;
+
+      if (user) {
+        dispatch(setUser(user)); // ✅ redux user set
+      }
+
+      router.replace("/dashboard");
     } catch (err: any) {
       const apiData = err?.data;
 
@@ -98,21 +110,14 @@ export function LoginForm({
     setOtpMsg(null);
     const email = emailFromQuery || watch("email");
 
-    if (!email) {
-      setOtpMsg("Email is missing.");
-      return;
-    }
-    if (!otp || otp.length < 4) {
-      setOtpMsg("Please enter a valid OTP.");
-      return;
-    }
+    if (!email) return setOtpMsg("Email is missing.");
+    if (!otp || otp.length < 4) return setOtpMsg("Please enter a valid OTP.");
 
     try {
       await verifyEmail({ email, otp }).unwrap();
       setOtpMsg("✅ OTP verified. Now you can login.");
-
-      // needOtp remove করে login enable
       router.replace(`/login?email=${encodeURIComponent(email)}`);
+ // needOtp remove
     } catch (err: any) {
       setOtpMsg(err?.data?.message || "❌ OTP invalid or expired.");
     }
@@ -121,10 +126,7 @@ export function LoginForm({
   const handleResendOtp = async () => {
     setOtpMsg(null);
     const email = emailFromQuery || watch("email");
-    if (!email) {
-      setOtpMsg("Email is missing.");
-      return;
-    }
+    if (!email) return setOtpMsg("Email is missing.");
 
     try {
       await resendOtp({ email }).unwrap();
@@ -207,7 +209,7 @@ export function LoginForm({
             type="email"
             placeholder="m@example.com"
             {...register("email")}
-            disabled={!!emailFromQuery} // query থেকে এলে lock
+            disabled={!!emailFromQuery}
           />
           {errors.email && (
             <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
@@ -250,6 +252,7 @@ export function LoginForm({
           >
             {isSubmitting || isLoading ? "Logging in..." : "Login"}
           </Button>
+
           {needOtp && (
             <p className="mt-2 text-center text-sm text-muted-foreground">
               🔒 Verify OTP first to enable login.
@@ -260,11 +263,7 @@ export function LoginForm({
         <FieldSeparator>Or continue with</FieldSeparator>
 
         <Field>
-          <Button
-            variant="outline"
-            type="button"
-            className="flex items-center gap-2"
-          >
+          <Button variant="outline" type="button" className="flex items-center gap-2">
             <FaGithub className="h-5 w-5" />
             Login with GitHub
           </Button>

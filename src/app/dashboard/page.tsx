@@ -1,30 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import LogoutButton from "../../app/components/logout-button";
 
 export default function DashboardPage() {
   const router = useRouter();
   const user = useSelector((state: any) => state.auth.user);
+  const hydrated = useSelector((state: any) => state.auth.hydrated);
 
   useEffect(() => {
+    if (!hydrated) return;
+
     if (!user) {
       router.replace("/login");
+      return;
     }
-  }, [user, router]);
 
-  if (!user) return null;
+    router.replace("/dashboard");
+  }, [hydrated, user, router]);
 
-  return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-semibold">
-        Welcome, {user?.email}
-      </h1>
-
-      {/* 🔓 Logout */}
-      <LogoutButton />
-    </div>
-  );
+  return null;
 }

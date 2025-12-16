@@ -1,33 +1,37 @@
-import { createSlice } from "@reduxjs/toolkit";
-import { storage } from "../utils/storage";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 type AuthState = {
-  token: string | null;
   user: any | null;
+
+  // ✅ current-user check শেষ হয়েছে কিনা (বা login/logout হয়েছে কিনা)
+  hydrated: boolean;
 };
 
 const initialState: AuthState = {
-  token: storage.getToken(),
   user: null,
+  hydrated: false,
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setCredentials: (state, action) => {
-      const { token, user } = action.payload || {};
-      state.token = token ?? null;
-      state.user = user ?? null;
-      if (token) storage.setToken(token);
+    setUser: (state, action: PayloadAction<any>) => {
+      state.user = action.payload;
+      state.hydrated = true;
     },
+
     logout: (state) => {
-      state.token = null;
       state.user = null;
-      storage.removeToken();
+      state.hydrated = true;
+    },
+
+    clearUser: (state) => {
+      state.user = null;
+      state.hydrated = true;
     },
   },
 });
 
-export const { setCredentials, logout } = authSlice.actions;
+export const { setUser, logout, clearUser } = authSlice.actions;
 export default authSlice.reducer;
